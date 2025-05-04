@@ -3,33 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Textarea que respeta saltos de línea</title>
+    <title>Analizador Léxico y Sintáctico</title>
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/view/inicio.css"> <!-- Archivo CSS personalizado -->
+    <style>
+        .textarea-grande {
+            height: 150px;
+            font-size: 1.2rem;
+            padding: 15px;
+            resize: none;
+        }
+        textarea[readonly] {
+            background-color: #f8f9fa;
+            cursor: not-allowed;
+        }
+        .error-message {
+            color: red;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .token-table {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
 </head>
 <body>
     <div class="container mt-5">
-        <!-- Textarea en lugar de input -->
         <div class="row mb-3">
-            <div class="col-12">
-                <textarea id="inputTexto" class="form-control textarea-grande" rows="10" placeholder="Escribe aquí..."></textarea>
+            <div class="col-md-6">
+                <textarea id="inputTexto" class="form-control textarea-grande" rows="10" placeholder="Escribe aquí tu código..."></textarea>
+                <div id="errorContainer" class="error-message"></div>
+            </div>
+            <div class="col-md-6">
+                <div class="token-table">
+                    <table class="table table-bordered table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Identification</th>
+                                <th>Tipo</th>
+                                <th>Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tokenTableBody">
+                            <!-- Tokens se insertarán aquí dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <!-- Botón Enviar -->
         <div class="row mb-3">
             <div class="col-12">
-                <button id="btnEnviar" type="button" class="btn btn-primary btn-block">Enviar</button>
+                <button id="btnEnviar" class="btn btn-primary btn-block">Analizar Código</button>
             </div>
         </div>
 
-        <!-- Resultados Léxico y Sintáctico -->
         <div class="row">
             <div class="col-md-6 mb-3">
-                <textarea id="resultadoLexico" class="form-control" rows="10" placeholder="Resultado Léxico"></textarea>
+                <textarea id="resultadoLexico" class="form-control textarea-grande" rows="10" readonly placeholder="Resultado Léxico"></textarea>
             </div>
             <div class="col-md-6 mb-3">
-                <textarea id="resultadoSintactico" class="form-control" rows="10" placeholder="Resultado Sintáctico"></textarea>
+                <textarea id="resultadoSintactico" class="form-control textarea-grande" rows="10" readonly placeholder="Resultado Sintáctico"></textarea>
             </div>
         </div>
     </div>
@@ -37,8 +71,6 @@
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-
-    <!-- Referencia al archivo JavaScript externo -->
-    <script src="/script/app.js"></script>
+    <script src="./script/app.js"></script>
 </body>
 </html>
