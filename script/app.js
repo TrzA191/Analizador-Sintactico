@@ -152,10 +152,11 @@ document.getElementById('btnEnviar').addEventListener('click', function() {
 
 function lexico(input) {
     const tokenPatterns = [
-        { type: 'KEYWORD', pattern: /\b(int|char|float|double|string|bool)\b/ },
+        { type: 'KEYWORD', pattern: /\b(if|else|while|return|int|char|float|double|string|bool)\b/ }, 
         { type: 'IDENTIFIER', pattern: /\b[a-zA-Z_][a-zA-Z0-9_]*\b/ },
         { type: 'NUMBER', pattern: /\b\d+(\.\d+)?\b/ },
-        { type: 'STRING', pattern: /"[^"]*"|'[^']*'/ },
+        { type: 'STRING', pattern: /"[^"]*"/ },  // Solo comillas dobles para strings
+        { type: 'CHAR', pattern: /'[^']?'/ },    // Caracteres entre comillas simples
         { type: 'BOOLEAN', pattern: /\b(true|false)\b/ },
         { type: 'OPERATOR', pattern: /[+\-*/%=]/ },
         { type: 'DELIMITER', pattern: /[;,(){}[\]]/ },
@@ -195,9 +196,8 @@ function lexico(input) {
 function sintactico(tokens) {
     let i = 0;
     let output = "";
-    symbolTable = []; // Reiniciar tabla de símbolos
+    symbolTable = [];
     
-    // Expresiones regulares para identificar tipos
     const typePatterns = {
         'int': /^-?\d+$/,
         'float': /^-?\d+\.\d+$/,
@@ -212,7 +212,7 @@ function sintactico(tokens) {
             i+1 < tokens.length && tokens[i+1].value === '=') {
             
             const identifier = tokens[i].value;
-            i += 2; // Saltar identificador y '='
+            i += 2;
             
             if (i >= tokens.length) {
                 throw new Error(`Error: Se esperaba un valor después del '='`);
@@ -223,29 +223,30 @@ function sintactico(tokens) {
             let value = valueToken.value;
             
             // Determinar el tipo automáticamente
-            for (const [tipo, pattern] of Object.entries(typePatterns)) {
-                if (pattern.test(valueToken.value)) {
-                    type = tipo;
-                    break;
-                }
+            if (valueToken.type === 'CHAR') {
+                type = 'char';
+                value = valueToken.value.replace(/^'|'$/g, ''); // Eliminar comillas
             }
-            
-            // Manejar casos especiales
-            if (valueToken.type === 'IDENTIFIER') {
-                // Buscar si el identificador está en la tabla de símbolos
+            else if (valueToken.type === 'STRING') {
+                type = 'string';
+                value = valueToken.value.replace(/^"|"$/g, '');
+            }
+            else if (valueToken.type === 'NUMBER') {
+                type = valueToken.value.includes('.') ? 'float' : 'int';
+            }
+            else if (valueToken.type === 'BOOLEAN') {
+                type = 'bool';
+            }
+            else if (valueToken.type === 'IDENTIFIER') {
                 const existingVar = symbolTable.find(v => v.identificador === valueToken.value);
                 if (existingVar) {
                     type = existingVar.tipo;
                     value = existingVar.valor;
-                } else {
-                    type = 'desconocido';
                 }
             }
             
-            // Actualizar tabla de símbolos
             updateSymbolTable(identifier, type, value);
-            
-            i++; // Avanzar al siguiente token
+            i++;
         }
         // Detectar declaraciones (tipo identificador = valor)
         else if (tokens[i].type === 'KEYWORD' && 
@@ -253,11 +254,10 @@ function sintactico(tokens) {
             
             const type = tokens[i].value;
             const identifier = tokens[i+1].value;
-            i += 2; // Saltar tipo e identificador
+            i += 2;
             
-            // Verificar si hay asignación
             if (i < tokens.length && tokens[i].value === '=') {
-                i++; // Saltar '='
+                i++;
                 
                 if (i >= tokens.length) {
                     throw new Error(`Error: Se esperaba un valor después del '='`);
@@ -266,35 +266,28 @@ function sintactico(tokens) {
                 const valueToken = tokens[i];
                 let value = valueToken.value;
                 
-                // Validar tipo
-                if (!typePatterns[type].test(valueToken.value) && 
-                    !(valueToken.type === 'IDENTIFIER' && 
-                      symbolTable.find(v => v.identificador === valueToken.value && v.tipo === type))) {
-                    throw new Error(`Error de tipo: No se puede asignar '${valueToken.value}' a variable de tipo '${type}'`);
+                // Validar tipo para caracteres
+                if (type === 'char' && valueToken.type !== 'CHAR') {
+                    throw new Error(`Error de tipo: Se esperaba un carácter entre comillas simples para '${identifier}'`);
                 }
                 
-                // Si es identificador, obtener su valor
-                if (valueToken.type === 'IDENTIFIER') {
-                    const varRef = symbolTable.find(v => v.identificador === valueToken.value);
-                    if (varRef) value = varRef.valor;
+                if (type === 'char' && valueToken.type === 'CHAR') {
+                    value = valueToken.value.replace(/^'|'$/g, '');
                 }
+                
+                // Resto de validaciones de tipos...
                 
                 updateSymbolTable(identifier, type, value);
-                i++; // Avanzar al siguiente token
+                i++;
             } else {
-                // Declaración sin asignación
                 updateSymbolTable(identifier, type, 'no asignado');
             }
         }
         
-        // Avanzar al siguiente token
-        if (i < tokens.length) {
-            // Saltar delimitadores
-            if (tokens[i].value === ';') {
-                i++;
-            } else {
-                i++;
-            }
+        if (i < tokens.length && tokens[i].value === ';') {
+            i++;
+        } else if (i < tokens.length) {
+            i++;
         }
     }
     
@@ -302,20 +295,20 @@ function sintactico(tokens) {
 }
 
 function updateSymbolTable(identificador, tipo, valor) {
-    // Eliminar comillas de strings/chars para mostrar
     let displayValue = valor;
-    if ((tipo === 'string' || tipo === 'char') && typeof valor === 'string') {
-        displayValue = valor.replace(/^['"]|['"]$/g, '');
+    
+    // Formatear caracteres para mostrar
+    if (tipo === 'char') {
+        displayValue = `'${valor}'`;  // Mostrar con comillas simples
+    } else if (tipo === 'string') {
+        displayValue = `"${valor}"`; // Mostrar con comillas dobles
     }
     
-    // Buscar si el identificador ya existe
     const existingIndex = symbolTable.findIndex(entry => entry.identificador === identificador);
     
     if (existingIndex >= 0) {
-        // Actualizar entrada existente
         symbolTable[existingIndex] = { identificador, tipo, valor: displayValue };
     } else {
-        // Agregar nueva entrada
         symbolTable.push({ identificador, tipo, valor: displayValue });
     }
     
@@ -344,68 +337,84 @@ function updateTokenTable() {
 
 // Función para mostrar errores en modal
 // Función mejorada para mostrar errores
-function showError(error, position = null) {
+// Versión optimizada de showError
+function showError(error, position = null, input = null) {
     const modalBody = document.getElementById('errorModalBody');
+    if (!modalBody) {
+        console.error('No se encontró el elemento errorModalBody');
+        return;
+    }
+
     let errorMessage = '';
-    
-    // Mensajes personalizados para cada tipo de error
-    if (error.includes('unterminated string literal')) {
-        errorMessage = `
-            <div class="alert alert-danger">
-                <h5>❌ Error de sintaxis: Cadena incompleta</h5>
-                <p>Te falta cerrar las comillas en tu cadena de texto.</p>
-                <p><strong>Solución:</strong> Asegúrate que todas las cadenas tengan comillas de cierre ("" o '').</p>
-                ${position ? `<p><strong>Posición:</strong> Línea ${position.line}, Columna ${position.column}</p>` : ''}
-                <pre>Ejemplo correcto: nombre = "Juan"</pre>
-            </div>
-        `;
+    const errorLower = error.toLowerCase();
+
+    // Mensajes personalizados mejorados
+    if (errorLower.includes('unterminated string') || errorLower.includes('comillas')) {
+        errorMessage = createErrorHTML(
+            '❌ Error de sintaxis: Cadena incompleta',
+            'Faltan comillas de cierre en tu cadena de texto o carácter.',
+            position,
+            `Ejemplo correcto: nombre = "Juan" o letra = 'a'`
+        );
     }
     else if (error.includes('Cannot set properties of null')) {
-        errorMessage = `
-            <div class="alert alert-danger">
-                <h5>⚠️ Error interno del sistema</h5>
-                <p>Ocurrió un problema al intentar mostrar los resultados.</p>
-                <p><strong>Posible causa:</strong> El código contiene elementos no válidos que impiden el análisis.</p>
-                <p><strong>Solución:</strong> Revisa tu código en busca de sintaxis incorrecta.</p>
-            </div>
-        `;
+        errorMessage = createErrorHTML(
+            '⚠️ Error de análisis',
+            'El código contiene una estructura no válida que impide el análisis completo.',
+            position,
+            `Revisa especialmente las asignaciones como: grupo = 'f' (usa comillas simples para caracteres)`
+        );
     }
-    else if (error.includes('invalid syntax')) {
-        errorMessage = `
-            <div class="alert alert-danger">
-                <h5>❌ Error de sintaxis</h5>
-                <p>La estructura del código no es válida.</p>
-                ${position ? `<p><strong>Ubicación del error:</strong> Línea ${position.line}</p>` : ''}
-                <p><strong>Revisa:</strong></p>
-                <ul>
-                    <li>Que todos los paréntesis/llaves estén cerrados</li>
-                    <li>Que no haya comas o puntos faltantes</li>
-                    <li>Que la indentación sea correcta</li>
-                </ul>
-            </div>
-        `;
+    else if (errorLower.includes('invalid syntax') || errorLower.includes('sintaxis')) {
+        errorMessage = createErrorHTML(
+            '❌ Error de sintaxis',
+            'La estructura del código no es válida.',
+            position,
+            `Ejemplo de error común: grupo = 'f' (asegúrate que sea una asignación válida)`
+        );
+    }
+    else if (errorLower.includes('no soportado') || errorLower.includes('tipo de dato')) {
+        errorMessage = createErrorHTML(
+            '❌ Error de tipo',
+            'Tipo de dato no compatible en la operación.',
+            position,
+            `Para caracteres usa: letra = 'a' (comillas simples)`
+        );
     }
     else {
-        errorMessage = `
-            <div class="alert alert-danger">
-                <h5>⚠️ Error encontrado</h5>
-                <p>${error}</p>
-                ${position ? `<p><strong>Ubicación:</strong> Línea ${position.line}, Columna ${position.column}</p>` : ''}
-            </div>
-        `;
+        errorMessage = createErrorHTML(
+            '⚠️ Error encontrado',
+            error,
+            position,
+            `Código problemático: ${input ? input.substring(position?.index || 0, (position?.index || 0) + 20) : ''}`
+        );
     }
-    
+
     modalBody.innerHTML = errorMessage;
     $('#errorModal').modal('show');
-    
-    // Limpiar resultados previos
-    document.getElementById('tokenTableBody').innerHTML = '';
-    document.getElementById('resultadoLexico').value = 'Ocurrió un error (ver ventana emergente)';
-    document.getElementById('resultadoSintactico').value = 'Ocurrió un error (ver ventana emergente)';
 }
 
-// Función para obtener posición del error (línea/columna)
+// Función auxiliar para crear HTML de error
+function createErrorHTML(title, description, position, solution = '') {
+    return `
+        <div class="alert alert-danger">
+            <h5>${title}</h5>
+            <p>${description}</p>
+            ${position ? `
+                <p><strong>Ubicación:</strong> 
+                    Línea ${position.line}, Columna ${position.column}
+                    ${position.index ? `(posición ${position.index})` : ''}
+                </p>
+            ` : ''}
+            ${solution ? `<p><strong>Solución:</strong> ${solution}</p>` : ''}
+        </div>
+    `;
+}
+
+// Función mejorada para obtener posición del error
 function getErrorPosition(input, errorIndex) {
+    if (!input) return { line: 1, column: 1, index: 0 };
+    
     const lines = input.split('\n');
     let line = 1;
     let column = 1;
@@ -414,73 +423,98 @@ function getErrorPosition(input, errorIndex) {
     for (const currentLine of lines) {
         if (currentPos + currentLine.length >= errorIndex) {
             column = errorIndex - currentPos + 1;
-            return { line, column };
+            return { line, column, index: errorIndex };
         }
         currentPos += currentLine.length + 1;
         line++;
     }
-    return { line: 1, column: 1 };
+    return { line: 1, column: 1, index: 0 };
 }
 
-// Modificación en la función sintactico()
-function sintactico(tokens) {
+// Versión optimizada de sintactico()
+function sintactico(tokens, input) {
     let i = 0;
-    symbolTable = []; // Reiniciamos la tabla para cada análisis
+    symbolTable = [];
     
-    while (i < tokens.length) {
-        try {
-            // Ejemplo: Detectar identificadores inválidos
+    try {
+        while (i < tokens.length) {
+            // Detectar identificadores inválidos
             if (tokens[i].type === 'IDENTIFIER' && /^\d/.test(tokens[i].value)) {
-                throw new Error(`Nombre de variable inválido: '${tokens[i].value}'. No puede comenzar con número`);
+                const errorPos = getErrorPosition(input, tokens[i].index || 0);
+                throw new Error(`Nombre de variable inválido: '${tokens[i].value}'. No puede comenzar con número`, errorPos);
             }
             
-            // Detectar asignaciones
+            // Detectar asignaciones (identificador = valor)
             if (tokens[i].type === 'IDENTIFIER' && tokens[i+1]?.value === '=') {
                 const identificador = tokens[i].value;
-                i += 2; // Saltar identificador y '='
+                const assignPos = tokens[i].index || 0;
+                i += 2;
                 
                 if (i >= tokens.length) {
-                    throw new Error('Asignación incompleta');
+                    throw new Error('Asignación incompleta: falta el valor después del =', 
+                                  getErrorPosition(input, assignPos));
                 }
                 
-                // Determinar tipo y valor
+                // Manejo mejorado de tipos
                 let tipo, valor;
-                if (tokens[i].type === 'NUMBER') {
-                    tipo = 'int';
-                    valor = tokens[i].value;
-                } else if (tokens[i].type === 'STRING') {
-                    tipo = 'str';
-                    valor = tokens[i].value.replace(/^['"]|['"]$/g, '');
-                } else {
-                    throw new Error(`Tipo de dato no soportado para '${identificador}'`);
+                switch (tokens[i].type) {
+                    case 'NUMBER':
+                        tipo = tokens[i].value.includes('.') ? 'float' : 'int';
+                        valor = tokens[i].value;
+                        break;
+                    case 'STRING':
+                        tipo = 'string';
+                        valor = tokens[i].value.slice(1, -1); // Eliminar comillas
+                        break;
+                    case 'CHAR':
+                        tipo = 'char';
+                        valor = tokens[i].value.slice(1, -1); // Eliminar comillas simples
+                        break;
+                    case 'BOOLEAN':
+                        tipo = 'bool';
+                        valor = tokens[i].value;
+                        break;
+                    case 'IDENTIFIER':
+                        const varRef = symbolTable.find(v => v.identificador === tokens[i].value);
+                        if (!varRef) {
+                            throw new Error(`Variable no declarada: '${tokens[i].value}'`, 
+                                          getErrorPosition(input, tokens[i].index || 0));
+                        }
+                        tipo = varRef.tipo;
+                        valor = varRef.valor;
+                        break;
+                    default:
+                        throw new Error(`Tipo de dato no soportado: '${tokens[i].type}' para '${identificador}'`, 
+                                      getErrorPosition(input, tokens[i].index || 0));
                 }
                 
-                // Agregar a tabla solo si no hay errores
-                symbolTable.push({
-                    identificador,
-                    tipo,
-                    valor
-                });
+                updateSymbolTable(identificador, tipo, valor);
             }
+            
             i++;
-        } catch (error) {
-            showError(error.message);
-            return; // Detener análisis si hay error
         }
+        return "Análisis completado sin errores";
+    } catch (error) {
+        const errorPos = error.position || getErrorPosition(input, 0);
+        showError(error.message, errorPos, input);
+        return "Error en el análisis";
     }
-    return "Análisis completado sin errores";
 }
 
 // Modificación en el event listener del botón
-document.getElementById('btnEnviar').addEventListener('click', function() {
-    const input = document.getElementById('inputTexto').value;
-    
+document.getElementById('btnEnviar')?.addEventListener('click', function() {
+    const input = document.getElementById('inputTexto')?.value;
+    if (!input) {
+        showError('No se ingresó código para analizar');
+        return;
+    }
+
     try {
-        tokens = lexico(input);
-        const resultado = sintactico(tokens);
+        const tokens = lexico(input);
+        const resultado = sintactico(tokens, input); // Pasamos el input original para mejores mensajes de error
         document.getElementById('resultadoSintactico').value = resultado;
         updateTokenTable();
     } catch (error) {
-        showError(error.message);
+        showError(error.message, getErrorPosition(input, error.index || 0), input);
     }
 });
